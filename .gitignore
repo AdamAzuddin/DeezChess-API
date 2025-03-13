@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.so
+
+# Virtual env
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# VSCode
+.vscode/
+
+# PyCharm
+.idea/
+
+# MacOS
+.DS_Store
+
+# Logs
+*.log
+
+# Test cache
+.cache/
+pytest_cache/
+.coverage
+htmlcov/
+
+# dotenv
+.env
+.env.*
+
+# Byte-compiled / optimized / DLL files
+*.py[cod]
+*$py.class
+
+# Pip files
+pip-log.txt
+pip-delete-this-directory.txt
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# FastAPI specific (if using static file mounts)
+staticfiles/
