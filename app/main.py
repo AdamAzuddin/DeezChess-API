@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import legal_moves
 from app.api import healthcheck
-
+from app.api import pgn_upload
 app = FastAPI()
 
 # ✅ Add CORS middleware BEFORE including any routers
@@ -17,3 +17,4 @@ app.add_middleware(
 # Include your routes AFTER CORS middleware
 app.include_router(legal_moves.router)
 app.include_router(healthcheck.router)
+app.include_router(pgn_upload.router)
