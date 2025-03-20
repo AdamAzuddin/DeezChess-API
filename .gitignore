@@ -50,3 +50,6 @@ dmypy.json
 
 # FastAPI specific (if using static file mounts)
 staticfiles/
+
+
+*.bin
