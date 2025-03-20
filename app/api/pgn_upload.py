@@ -3,15 +3,14 @@ import tempfile
 import chess.pgn
 import chess.polyglot
 from tqdm import tqdm
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import StreamingResponse
 
 router = APIRouter()
 
 # Create polyglot opening book
-def create_player_opening_book(pgn_file, output_book, max_moves=10):
+def create_player_opening_book(pgn_file, output_book, player_name,max_moves=10):
     #player_name = os.path.splitext(os.path.basename(pgn_file))[0]
-    player_name = "Adam05"
     book_data = {}
     entries = []
     pbar = tqdm(desc="Creating opening book: ", unit="moves")
@@ -73,7 +72,7 @@ def create_player_opening_book(pgn_file, output_book, max_moves=10):
     print(f"Polyglot book created: {output_book}")
 
 @router.post("/pgn_upload")
-async def upload_pgn(file: UploadFile = File(...)):
+async def upload_pgn(file: UploadFile = File(...), playerName: str = Form(...)):
     try:
         tmpdir = tempfile.mkdtemp()
         pgn_path = os.path.join(tmpdir, file.filename)
@@ -81,8 +80,9 @@ async def upload_pgn(file: UploadFile = File(...)):
             f.write(await file.read())
 
         #book_output_path = os.path.join(tmpdir, f"{os.path.splitext(file.filename)[0]}.bin")
-        book_output_path = os.path.join(tmpdir, "Adam05.bin")
-        create_player_opening_book(pgn_path, book_output_path)
+        safe_player_name = playerName.replace(" ", "_").replace(",","")
+        book_output_path = os.path.join(tmpdir, f"{safe_player_name}.bin")
+        create_player_opening_book(pgn_path, book_output_path, player_name=playerName)
 
         # Open file in binary mode and stream it
         bin_file = open(book_output_path, "rb")
