@@ -1,5 +1,7 @@
 import os
+import json
 import tempfile
+import zipfile
 import chess.pgn
 import chess.polyglot
 from tqdm import tqdm
@@ -8,12 +10,18 @@ from fastapi.responses import StreamingResponse
 
 router = APIRouter()
 
+
 # Create polyglot opening book
-def create_player_opening_book(pgn_file, output_book, player_name,max_moves=10):
-    #player_name = os.path.splitext(os.path.basename(pgn_file))[0]
+def process_pgn(pgn_file, output_book, config_file_path, player_name, max_moves=10):
     book_data = {}
     entries = []
     pbar = tqdm(desc="Creating opening book: ", unit="moves")
+
+    total_elo = 0
+    game_count = 0
+    wins = 0
+    draws = 0
+    losses = 0
 
     with open(pgn_file, "r") as f:
         while True:
@@ -25,6 +33,26 @@ def create_player_opening_book(pgn_file, output_book, player_name,max_moves=10):
             is_black = game.headers.get("Black") == player_name
             if not is_white and not is_black:
                 continue
+
+            game_count += 1
+
+            # Sum ELO
+            try:
+                if is_white:
+                    total_elo += int(game.headers.get("WhiteElo", 1200))
+                else:
+                    total_elo += int(game.headers.get("BlackElo", 1200))
+            except ValueError:
+                total_elo += 1200
+
+            # WDL statistics
+            result = game.headers.get("Result", "*")
+            if (is_white and result == "1-0") or (is_black and result == "0-1"):
+                wins += 1
+            elif result == "1/2-1/2":
+                draws += 1
+            elif (is_white and result == "0-1") or (is_black and result == "1-0"):
+                losses += 1
 
             board = game.board()
             move_count = 0
@@ -68,8 +96,32 @@ def create_player_opening_book(pgn_file, output_book, player_name,max_moves=10):
             book.write(entry.weight.to_bytes(2, "big"))
             book.write(entry.learn.to_bytes(4, "big"))
 
+    # Generate JSON config file
+    avg_elo = total_elo // game_count if game_count > 0 else 1200
+    estimated_elo = ((avg_elo + 50) // 100) * 100 + 200  # round to nearest 100 + 200
+
+    total_games = wins + draws + losses
+    contempt_score = 0
+    if total_games > 0:
+        contempt_score = round(((wins - losses) / total_games) * 100, 2)
+
+    config = {
+        "player_name": player_name,
+        "estimated_elo": estimated_elo,
+        "avg_elo_from_pgn": avg_elo,
+        "games_played": total_games,
+        "wins": wins,
+        "draws": draws,
+        "losses": losses,
+        "estimated_contempt_score": contempt_score,
+    }
+
+    with open(config_file_path, "w") as config_file:
+        json.dump(config, config_file, indent=4)
+
     pbar.close()
     print(f"Polyglot book created: {output_book}")
+    print(f"Config file created: {config_file_path}")
 
 @router.post("/pgn_upload")
 async def upload_pgn(file: UploadFile = File(...), playerName: str = Form(...)):
@@ -79,17 +131,27 @@ async def upload_pgn(file: UploadFile = File(...), playerName: str = Form(...)):
         with open(pgn_path, "wb") as f:
             f.write(await file.read())
 
-        #book_output_path = os.path.join(tmpdir, f"{os.path.splitext(file.filename)[0]}.bin")
-        safe_player_name = playerName.replace(" ", "_").replace(",","")
+        safe_player_name = playerName.replace(" ", "_").replace(",", "")
         book_output_path = os.path.join(tmpdir, f"{safe_player_name}.bin")
-        create_player_opening_book(pgn_path, book_output_path, player_name=playerName)
+        config_output_path = os.path.join(tmpdir, f"{safe_player_name}.json")
 
-        # Open file in binary mode and stream it
-        bin_file = open(book_output_path, "rb")
+        # Process PGN file and generate book & config
+        process_pgn(pgn_path, book_output_path, config_output_path, player_name=playerName)
+
+        # Create ZIP file
+        zip_path = os.path.join(tmpdir, f"{safe_player_name}_output.zip")
+        with zipfile.ZipFile(zip_path, "w") as zipf:
+            zipf.write(book_output_path, arcname=os.path.basename(book_output_path))
+            zipf.write(config_output_path, arcname=os.path.basename(config_output_path))
+
+        # Stream ZIP file as response
+        zip_file = open(zip_path, "rb")
         return StreamingResponse(
-            bin_file,
-            media_type="application/octet-stream",
-            headers={"Content-Disposition": f"attachment; filename={os.path.basename(book_output_path)}"}
+            zip_file,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename={os.path.basename(zip_path)}"
+            },
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
