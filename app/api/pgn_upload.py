@@ -11,6 +11,24 @@ from fastapi.responses import StreamingResponse
 router = APIRouter()
 
 
+def encode_move(move: chess.Move) -> int:
+    """Polyglot move encoding as 16-bit integer."""
+    from_sq = move.from_square
+    to_sq = move.to_square
+    promo = move.promotion
+
+    # Polyglot promotion: 1=knight, 2=bishop, 3=rook, 4=queen
+    promotion_map = {
+        chess.KNIGHT: 1,
+        chess.BISHOP: 2,
+        chess.ROOK: 3,
+        chess.QUEEN: 4,
+    }
+    promotion = promotion_map.get(promo, 0)
+
+    return (from_sq << 6) | to_sq | (promotion << 12)
+
+
 # Create polyglot opening book
 def process_pgn(pgn_file, output_book, config_file_path, player_name, max_moves=10):
     book_data = {}
@@ -23,7 +41,7 @@ def process_pgn(pgn_file, output_book, config_file_path, player_name, max_moves=
     draws = 0
     losses = 0
 
-    with open(pgn_file, "r") as f:
+    with open(pgn_file, "r", encoding="utf-8") as f:
         while True:
             game = chess.pgn.read_game(f)
             if game is None:
@@ -36,16 +54,13 @@ def process_pgn(pgn_file, output_book, config_file_path, player_name, max_moves=
 
             game_count += 1
 
-            # Sum ELO
             try:
-                if is_white:
-                    total_elo += int(game.headers.get("WhiteElo", 1200))
-                else:
-                    total_elo += int(game.headers.get("BlackElo", 1200))
+                total_elo += int(
+                    game.headers.get("WhiteElo" if is_white else "BlackElo", 1200)
+                )
             except ValueError:
                 total_elo += 1200
 
-            # WDL statistics
             result = game.headers.get("Result", "*")
             if (is_white and result == "1-0") or (is_black and result == "0-1"):
                 wins += 1
@@ -62,43 +77,55 @@ def process_pgn(pgn_file, output_book, config_file_path, player_name, max_moves=
                 if move_count > max_moves:
                     break
 
-                if (is_white and board.turn) or (is_black and not board.turn):
-                    fen = board.fen()
+                fen = board.fen()
+                if fen not in book_data:
+                    book_data[fen] = {}
 
-                    if fen not in book_data:
-                        book_data[fen] = {}
-
-                    uci_move = move.uci()
-                    if uci_move not in book_data[fen]:
-                        book_data[fen][uci_move] = 0
-                    book_data[fen][uci_move] += 1
+                uci_move = move.uci()
+                if uci_move not in book_data[fen]:
+                    book_data[fen][uci_move] = 0
+                
+                book_data[fen][uci_move] += 1
 
                 board.push(move)
                 pbar.update(1)
 
     for fen, moves in book_data.items():
-        for move, weight in moves.items():
-            entry = chess.polyglot.Entry(
-                key=chess.polyglot.zobrist_hash(chess.Board(fen)),
-                raw_move=0,
-                weight=weight,
-                learn=0,
-                move=chess.Move.from_uci(move),
-            )
-            entries.append(entry)
+        for move_uci, weight in moves.items():
+            try:
+                board = chess.Board()
+                board.set_fen(fen)
+                move = board.parse_uci(move_uci)
+                encoded_move = encode_move(move=move)
+                entry = chess.polyglot.Entry(
+                    key=chess.polyglot.zobrist_hash(board),
+                    raw_move=encoded_move,
+                    weight=weight,
+                    learn=0,
+                    move=move,
+                )
+                entries.append(entry)
+                print(
+                    f"Creating book entry: FEN={fen}, ZobristKey={chess.polyglot.zobrist_hash(board)}"
+                )
+            except Exception as e:
+                print(f"Skipping entry: FEN={fen}, Move={move_uci}, Error={e}")
 
     entries.sort(key=lambda entry: entry.key)
 
-    with open(output_book, "wb") as book:
-        for entry in entries:
-            book.write(entry.key.to_bytes(8, "big"))
-            book.write(entry.raw_move.to_bytes(2, "big"))
-            book.write(entry.weight.to_bytes(2, "big"))
-            book.write(entry.learn.to_bytes(4, "big"))
+    try:
+        with open(output_book, "wb") as book:
+            for entry in entries:
+                book.write(entry.key.to_bytes(8, "big"))
+                book.write(entry.raw_move.to_bytes(2, "big"))
+                book.write(entry.weight.to_bytes(2, "big"))
+                book.write(entry.learn.to_bytes(4, "big"))
+    except Exception as e:
+        print(f"Failed writing book: {e}")
+        raise
 
-    # Generate JSON config file
     avg_elo = total_elo // game_count if game_count > 0 else 1200
-    estimated_elo = ((avg_elo + 50) // 100) * 100 + 200  # round to nearest 100 + 200
+    estimated_elo = ((avg_elo + 50) // 100) * 100 + 200
 
     total_games = wins + draws + losses
     contempt_score = 0
@@ -116,12 +143,13 @@ def process_pgn(pgn_file, output_book, config_file_path, player_name, max_moves=
         "estimated_contempt_score": contempt_score,
     }
 
-    with open(config_file_path, "w") as config_file:
+    with open(config_file_path, "w", encoding="utf-8") as config_file:
         json.dump(config, config_file, indent=4)
 
     pbar.close()
     print(f"Polyglot book created: {output_book}")
     print(f"Config file created: {config_file_path}")
+
 
 @router.post("/pgn_upload")
 async def upload_pgn(file: UploadFile = File(...), playerName: str = Form(...)):
@@ -136,7 +164,9 @@ async def upload_pgn(file: UploadFile = File(...), playerName: str = Form(...)):
         config_output_path = os.path.join(tmpdir, f"{safe_player_name}.json")
 
         # Process PGN file and generate book & config
-        process_pgn(pgn_path, book_output_path, config_output_path, player_name=playerName)
+        process_pgn(
+            pgn_path, book_output_path, config_output_path, player_name=playerName
+        )
 
         # Create ZIP file
         zip_path = os.path.join(tmpdir, f"{safe_player_name}_output.zip")
