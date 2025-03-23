@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 import chess
 import chess.polyglot
 import os
+import platform
 import tempfile
 import random
 import json
@@ -9,13 +10,17 @@ import asyncio
 
 router = APIRouter()
 
-# Define path to stockfish binary relative to this file
-STOCKFISH_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "stockfish.exe")
-
+def get_stockfish_path():
+    base_path = os.path.dirname(os.path.dirname(__file__))
+    if platform.system() == "Windows":
+        return os.path.join(base_path, "stockfish.exe")
+    else:
+        return os.path.join(base_path, "stockfish")
+    
 async def getMoveFromStockfish(fen: str, estimated_elo: int, contempt_score: int) -> str:
     try:
         process = await asyncio.create_subprocess_exec(
-            STOCKFISH_PATH,
+            get_stockfish_path(),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

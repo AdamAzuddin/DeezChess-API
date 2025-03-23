@@ -11,8 +11,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 4. Copy entire project code
 COPY . .
 
-# 5. Expose port
+# 5. Ensure Linux stockfish binary is executable
+RUN chmod +x /app/stockfish
+
+# 6. Expose port
 EXPOSE 8000
 
-# 6. Command to run FastAPI with Uvicorn
+# 7. Command to run FastAPI with Uvicorn
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
