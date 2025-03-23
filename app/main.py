@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import legal_moves
 from app.api import healthcheck
 from app.api import pgn_upload
-from app.api import find_opening_move
+from app.api import get_bot_move
 
 app = FastAPI()
 
@@ -20,4 +20,4 @@ app.add_middleware(
 app.include_router(legal_moves.router)
 app.include_router(healthcheck.router)
 app.include_router(pgn_upload.router)
-app.include_router(find_opening_move.router)
+app.include_router(get_bot_move.router)
