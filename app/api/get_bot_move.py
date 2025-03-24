@@ -15,7 +15,7 @@ def get_stockfish_path():
     if platform.system() == "Windows":
         return os.path.join(base_path, "stockfish.exe")
     else:
-        return os.path.join(base_path, "stockfish")
+        return "/usr/local/bin/stockfish"
     
 async def getMoveFromStockfish(fen: str, estimated_elo: int, contempt_score: int) -> str:
     try:
