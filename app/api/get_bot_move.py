@@ -96,7 +96,6 @@ async def get_bot_move(
         try:
             with chess.polyglot.open_reader(book_path) as reader:
                 entries = list(reader.find_all(board))
-                print(f"Looking up FEN={fen}, ZobristKey={chess.polyglot.zobrist_hash(board)}")
                 if entries:
                     move = random.choice(entries).move
                     return {"uci_move": move.uci()}
