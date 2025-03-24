@@ -66,6 +66,7 @@ async def get_bot_move(
     config_file: UploadFile = File(...),
     fen: str = Form(...)
 ):
+    print("Finding move for fen "+fen)
     try:
         estimated_elo = 1200
         contempt_score = 20
