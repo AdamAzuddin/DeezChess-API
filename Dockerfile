@@ -15,10 +15,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN curl -L https://github.com/official-stockfish/Stockfish/releases/latest/download/stockfish-ubuntu-x86-64-avx2.tar -o stockfish.tar && \
     tar -xf stockfish.tar && \
     rm stockfish.tar && \
-    mv stockfish-ubuntu-x86-64-avx2/stockfish/stockfish-ubuntu-x86-64-avx2 stockfish && \
-    rm -rf stockfish-ubuntu-x86-64-avx2 && \
-    mv stockfish /usr/local/bin/stockfish && \
-    chmod +x /usr/local/bin/stockfish
+    # Find the extracted folder dynamically
+    STOCKFISH_BIN=$(find . -type f -name "stockfish-ubuntu-x86-64-avx2" | head -n 1) && \
+    mv "$STOCKFISH_BIN" /usr/local/bin/stockfish && \
+    chmod +x /usr/local/bin/stockfish && \
+    rm -rf *
 
 # 6. Copy all your project files
 COPY . .
