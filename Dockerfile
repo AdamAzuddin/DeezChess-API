@@ -14,9 +14,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 5. Download and install Stockfish Linux binary (from GitHub tar)
 RUN curl -L https://github.com/official-stockfish/Stockfish/releases/latest/download/stockfish-ubuntu-x86-64-avx2.tar -o stockfish.tar && \
     tar -xf stockfish.tar && \
+    rm stockfish.tar && \
+    mv stockfish-ubuntu-x86-64-avx2/stockfish/stockfish-ubuntu-x86-64-avx2 stockfish && \
+    rm -rf stockfish-ubuntu-x86-64-avx2 && \
     mv stockfish /usr/local/bin/stockfish && \
-    chmod +x /usr/local/bin/stockfish && \
-    rm stockfish.tar
+    chmod +x /usr/local/bin/stockfish
 
 # 6. Copy all your project files
 COPY . .
