@@ -6,6 +6,7 @@ import platform
 import tempfile
 import random
 import json
+import logging
 import asyncio
 
 router = APIRouter()
@@ -57,6 +58,7 @@ async def getMoveFromStockfish(fen: str, estimated_elo: int, contempt_score: int
         return best_move if best_move else "0000"
 
     except Exception as e:
+        logging.exception("Stockfish encountered an error")
         raise HTTPException(status_code=500, detail=f"Stockfish error: {str(e)}")
 
 
@@ -88,11 +90,13 @@ async def get_bot_move(
                 estimated_elo = int(config.get("estimated_elo", estimated_elo))
                 contempt_score = int(round(config.get("estimated_contempt_score", contempt_score)))
         except Exception as e:
+            logging.exception("Invalid config JSON")
             raise HTTPException(status_code=400, detail=f"Invalid config JSON: {str(e)}")
 
         try:
             board = chess.Board(fen)
         except Exception as e:
+            logging.exception("Invalid FEN")
             raise HTTPException(status_code=400, detail=f"Invalid FEN: {str(e)}")
 
         try:
@@ -103,6 +107,7 @@ async def get_bot_move(
                     return {"uci_move": move.uci()}
         except Exception as e:
             # Log the error but don't crash — fallback to Stockfish
+            logging.exception("Opening book error - Falling back to Stockfish")
             print(f"Opening book error: {e}")
 
         # If no move from book OR book read failed, fallback to Stockfish
@@ -110,6 +115,6 @@ async def get_bot_move(
         return {"uci_move": bestMove}
 
     except Exception as e:
-        print(book_path)
-        print(config_path)
+        logging.exception("Unexpected error in get_bot_move")
+        logging.error(f"Book path: {book_path}, Config path: {config_path}")
         raise HTTPException(status_code=500, detail=str(e))
