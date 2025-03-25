@@ -74,13 +74,11 @@ async def get_bot_move(
         tmpdir = tempfile.mkdtemp()
 
         book_path = os.path.join(tmpdir, bin_file.filename)
-        print(book_path)
         
         with open(book_path, "wb") as f:
             f.write(await bin_file.read())
 
         config_path = os.path.join(tmpdir, config_file.filename)
-        print(config_path)
         with open(config_path, "wb") as cf:
             cf.write(await config_file.read())
 
@@ -112,4 +110,6 @@ async def get_bot_move(
         return {"uci_move": bestMove}
 
     except Exception as e:
+        print(book_path)
+        print(config_path)
         raise HTTPException(status_code=500, detail=str(e))

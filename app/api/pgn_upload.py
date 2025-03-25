@@ -105,9 +105,6 @@ def process_pgn(pgn_file, output_book, config_file_path, player_name, max_moves=
                     move=move,
                 )
                 entries.append(entry)
-                print(
-                    f"Creating book entry: FEN={fen}, ZobristKey={chess.polyglot.zobrist_hash(board)}"
-                )
             except Exception as e:
                 print(f"Skipping entry: FEN={fen}, Move={move_uci}, Error={e}")
 
